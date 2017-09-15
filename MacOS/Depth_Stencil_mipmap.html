@@ -1,0 +1,110 @@
+<html>
+<body>
+<canvas id="gl" width="128" height="128"></canvas>
+<script>
+var vshader = 'attribute vec2 vertex;\n' +
+              'varying vec2 position;\n' +
+              'void main () {\n' +
+			  '  position = vertex;' +
+              '  gl_Position = vec4(vertex, 0, 1);\n' +
+              '}\n';
+var fshader = 'precision mediump float;\n' +
+              'uniform sampler2D texture;\n' +
+              'varying vec2 position;\n' +
+              'void main () {\n' +
+			  '  if (abs(texture2D (texture, position).r - 1.0) < 0.01) gl_FragColor = vec4(0, 1, 0, 1);' +
+			  '  else gl_FragColor = vec4(1, 0, 0, 1);' +
+              '}\n';
+			  
+function drawQuad() {
+    var quadVB = gl.createBuffer();
+	var quadVerts = new Float32Array(2 * 6);
+	
+	quadVerts[0]  = -1.0; quadVerts[1]  =   1.0; 
+    quadVerts[2]  = -1.0; quadVerts[3]  =  -1.0; 
+    quadVerts[4]  =  1.0; quadVerts[5]  =  -1.0; 
+    quadVerts[6]  = -1.0; quadVerts[7]  =   1.0; 
+    quadVerts[8]  =  1.0; quadVerts[9]  =  -1.0; 
+    quadVerts[10] =  1.0; quadVerts[11] =   1.0; 
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadVB);
+    gl.bufferData(gl.ARRAY_BUFFER, quadVerts, gl.STATIC_DRAW);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, gl.FALSE, 0, 0);
+    gl.enableVertexAttribArray(0);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+}
+
+function useProgram(vshader, fshader)
+{
+	var drawProgram = gl.createProgram();
+	var vs = gl.createShader(gl.VERTEX_SHADER);
+	gl.shaderSource(vs, vshader);
+	gl.compileShader(vs);
+	var fs = gl.createShader(gl.FRAGMENT_SHADER);
+	gl.shaderSource(fs, fshader);
+	gl.compileShader(fs);
+	gl.attachShader(drawProgram, vs);
+	gl.attachShader(drawProgram, fs);
+	gl.linkProgram(drawProgram); 
+	gl.useProgram(drawProgram);
+ 
+	return drawProgram;
+}
+			  
+var canvas = document.getElementById('gl');
+var gl = canvas.getContext("webgl2", {antialias:false});
+
+var tex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, tex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 128, 128, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+gl.bindTexture(gl.TEXTURE_2D, null);
+
+var depthTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, depthTex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+var levels = Math.log2(128);
+for (var mipLevel = 0; mipLevel <= levels; ++mipLevel)
+{
+	var size = 128 >> mipLevel;
+	gl.texImage2D(gl.TEXTURE_2D, mipLevel, gl.DEPTH24_STENCIL8, size, size, 0, gl.DEPTH_STENCIL,
+				  gl.UNSIGNED_INT_24_8, null);
+}
+
+gl.bindTexture(gl.TEXTURE_2D, null);
+var framebuffer = gl.createFramebuffer();
+gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+
+gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, depthTex, 0);
+
+gl.clearDepth(1);
+gl.clear(gl.DEPTH_BUFFER_BIT);
+
+gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+var render = function ()
+{
+    var blitProgram = useProgram(vshader, fshader);
+	
+    textureLoc = gl.getUniformLocation(blitProgram, "texture");
+    gl.uniform1i(textureLoc, 0);
+    gl.bindTexture(gl.TEXTURE_2D, depthTex);
+    drawQuad(0.5);
+	
+	requestAnimationFrame();
+}	 
+
+render();
+			  
+</script>
+</body>
+</html>
+
